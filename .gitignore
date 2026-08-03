@@ -1,0 +1,31 @@
+node_modules/
+.DS_Store
+*.log
+
+# Nothing here reads a .env today, but this project documents CLOUDFLARE_API_TOKEN and GH tokens, so one is a
+# plausible future addition — and it would otherwise be committed in silence.
+.env
+.env.*
+!.env.example
+
+# Build output, caches and editor state. None exist today; all are cheap to exclude before they do.
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.wrangler/
+.vscode/
+.idea/
+
+# Heap snapshots from `npm run probe`. A snapshot is a dump of everything the process held — process.env
+# included — so these must never be committed, and are worth deleting once a leak hunt is over.
+.probe/
+*.heapsnapshot
+
+# The private record of what actually broke, with the real hostnames and repo names behind the generic ones
+# used in the source. Deliberately not published; back it up separately, since it does not survive a clone.
+INCIDENTS.md
+
+# The scrub script holds the same mapping — every real name beside its replacement — so publishing it would
+# undo the scrub it performs. It is only useful to someone who already has the private mapping anyway.
+scripts/scrub.mjs

@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Runs pressroom from anywhere.
+#
+#   npm link                    once, from the project — puts `pressroom` on your PATH
+#   ln -s "$PWD/bin/pressroom" ~/bin/pressroom    or do it by hand, if you prefer
+#
+# Then `pressroom`, `pressroom --list`, `pressroom ~/work` all work from any directory. Arguments are passed
+# straight through.
+#
+# Two things this has to get right:
+#
+# **Resolve symlinks before locating the project.** Once this file is linked onto PATH, `dirname "$0"` is the
+# directory of the *link* — `/usr/local/bin` — not of the project, so the app and its dependencies would not be
+# found. The loop below walks the link chain to the real file.
+#
+# **Exec the project's own tsx, not npx.** `npx --prefix` re-resolves the package on every launch: measured at
+# 2520ms against 388ms for the binary directly. Two seconds of nothing, every time you open a session.
+set -e
+
+target=$0
+while [ -L "$target" ]; do
+	link=$(readlink "$target")
+	case $link in
+	/*) target=$link ;;
+	*) target=$(dirname "$target")/$link ;;
+	esac
+done
+here=$(cd "$(dirname "$target")/.." && pwd)
+
+tsx="$here/node_modules/.bin/tsx"
+if [ ! -x "$tsx" ]; then
+	echo "pressroom: dependencies are not installed." >&2
+	echo "  run:  (cd $here && npm install)" >&2
+	exit 1
+fi
+
+exec "$tsx" "$here/src/index.ts" "$@"

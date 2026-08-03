@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "ES2023",
+		"lib": ["ES2023"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		// Imports carry their real extension — `./git.ts`, not `./git` — because that is what node's own
+		// type stripping requires to run these files directly, without a build step.
+		"allowImportingTsExtensions": true,
+		"types": ["node"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"verbatimModuleSyntax": true,
+		"erasableSyntaxOnly": true
+	},
+	"include": ["src/**/*", "scripts/**/*"]
+}
