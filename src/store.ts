@@ -83,9 +83,16 @@ const pushKey = (push: Push) =>
 
 const key = (repo: string, sha: string) => `${repo}\u0000${sha}`;
 
-/** A Cloudflare deployment's identity. The deployment id is already unique per Worker. */
-const deployKey = (deploy: { repo: string; id: string }) =>
-	`deploy\u0000${deploy.repo}\u0000${deploy.id}`;
+/**
+ * A Cloudflare deployment's identity — including the **Worker**, not just the repo and the deployment id.
+ *
+ * A repo deploys more than one Worker: production and review are separate. Keying on the repo alone assumes
+ * a deployment id never repeats between two Workers of the same repo, and when that assumption broke the
+ * symptom was React reporting two children with one key and silently dropping a row — a deploy that had
+ * happened and was not on screen. The Worker name costs nothing and removes the assumption.
+ */
+const deployKey = (deploy: { repo: string; worker: string; id: string }) =>
+	`deploy\u0000${deploy.repo}\u0000${deploy.worker}\u0000${deploy.id}`;
 
 /** A run's row identity — stable while it moves from queued to finished. */
 const runKey = (run: { repo: string; id: number }) => `run\u0000${run.repo}\u0000${run.id}`;

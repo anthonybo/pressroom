@@ -1,10 +1,10 @@
 /**
  * Cloudflare deploys.
  *
- * A GitHub Actions run is not the whole story. Four of the seven Workers here deploy through Actions, and the
- * other three — `overlay`, `app`, `wildcard-worker` — are deployed by running `npm run deploy` on the
- * laptop, which calls `wrangler deploy` directly. Those never touch GitHub, so nothing about them appears in
- * a workflow run and they were entirely invisible to this dashboard.
+ * A GitHub Actions run is not the whole story. On the workspace this was built against, four of the seven
+ * Workers deploy through Actions and the other three are deployed by running `npm run deploy` on the laptop,
+ * which calls `wrangler deploy` directly. Those never touch GitHub, so nothing about them appears in a
+ * workflow run and they were entirely invisible to this dashboard.
  *
  * They are also a different *fact* from a workflow run, even where both exist. A green Action says the
  * pipeline finished; a Cloudflare deployment says the Worker version actually changed. A run that succeeds

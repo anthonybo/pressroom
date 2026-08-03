@@ -29,3 +29,6 @@ INCIDENTS.md
 # The scrub script holds the same mapping — every real name beside its replacement — so publishing it would
 # undo the scrub it performs. It is only useful to someone who already has the private mapping anyway.
 scripts/scrub.mjs
+
+# The demo workspace: invented repositories, rebuilt on demand by `npm run demo`.
+.demo/

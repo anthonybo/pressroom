@@ -17,7 +17,9 @@
 		"format": "prettier --write .",
 		"probe": "node --expose-gc --import tsx scripts/probe.tsx",
 		"check:contrast": "node --import tsx scripts/contrast.mjs",
-		"colors": "FORCE_COLOR=3 COLORTERM=truecolor tsx scripts/colors.tsx"
+		"colors": "FORCE_COLOR=3 COLORTERM=truecolor tsx scripts/colors.tsx",
+		"demo": "node scripts/demo.mjs",
+		"screenshot": "node scripts/demo.mjs --screenshot"
 	},
 	"dependencies": {
 		"ink": "^7.1.1",

@@ -23,6 +23,8 @@ import { width } from '../src/format.ts';
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = process.env.PRESSROOM_ROOT ?? dirname(PROJECT_ROOT);
+/** What the header shows. Separate from the path scanned, so a fixture render prints no real home path. */
+const ROOT_LABEL = process.env.PRESSROOM_ROOT_LABEL ?? ROOT;
 
 function arg(name: string, fallback: number): number {
 	const index = process.argv.indexOf(`--${name}`);
@@ -123,7 +125,7 @@ async function capture(columns: number, rows: number, waitMs: number) {
 	const engine = new Engine(repos, { limit: 40 });
 	engine.start();
 
-	const instance = render(<App engine={engine} root={ROOT} />, {
+	const instance = render(<App engine={engine} root={ROOT_LABEL} />, {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		stdout: stdout as any,
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
