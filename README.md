@@ -119,7 +119,8 @@ upstream is finished work that exists in exactly one place — and nowhere it ca
 | Key                      | Does                                                                       |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `↑` `↓` `j` `k`          | move — and stop following, so the cursor then stays where you put it        |
-| `pgup` `pgdn` `^d` `^u`  | a page at a time, in the feed and in a diff                                 |
+| `pgup` `pgdn` `^d` `^u`  | a page — the feed, a diff, or a commit message longer than its pane          |
+| `m`                      | in a commit: give the message the whole pane, hiding the file list           |
 | `g`                      | follow the newest again, and mark what arrived as read                      |
 | `G`                      | jump to the oldest row loaded                                               |
 | `⏎` `→` `l`              | open the commit, then a file                                                |
@@ -134,8 +135,14 @@ upstream is finished work that exists in exactly one place — and nowhere it ca
 | `?`                      | this table, in the app                                                      |
 | `q` `^c`                 | quit                                                                        |
 
-Page keys work in the feed and in a diff; a commit's file list takes `j`/`k`/`g`/`G`. Any filter term matches
-against several fields at once, so `/push main` narrows to pushes of `main`, and `/failed` to runs that failed.
+**Inside a commit, two things scroll and the keys are split by which one you are reading.** `↑↓`/`jk` move the
+file cursor, since that is the selection `⏎` acts on; the page keys scroll the **message**, which has no cursor.
+A message longer than half the pane says how much is above and below it and names both keys, because it is the
+one thing in this program you could otherwise fail to find at all — a paragraph cut off at the bottom looks
+like it was meant to end there. `g` goes back to the first line of it, `m` gives it the whole pane.
+
+Any filter term matches against several fields at once, so `/push main` narrows to pushes of `main`, and
+`/failed` to runs that failed.
 
 ---
 

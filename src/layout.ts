@@ -135,6 +135,39 @@ export function windowFor(
 }
 
 /**
+ * How much of a commit message is on screen, and how far it can be scrolled.
+ *
+ * The commit pane holds two things that both want the height: the message and the file list. A commit body
+ * here is routinely thirty or forty lines — a paragraph explaining what was measured — and the file list of
+ * the same commit can be eighteen entries, so neither can be given the pane outright.
+ *
+ * So the message gets half by default and can be scrolled through, and `m` gives it everything at the cost of
+ * the file list. The arithmetic is here rather than in the component because the component is not the only
+ * thing that needs it: the key handler has to clamp the scroll offset against the same numbers the renderer
+ * uses, and two copies of this formula would drift into a message that scrolls one line past its own end.
+ */
+export function commitBody(options: {
+	/** The pane's height in rows, chrome already subtracted. */
+	height: number;
+	/** How many lines the body has. */
+	lines: number;
+	/** Whether the message has been expanded over the file list. */
+	full: boolean;
+}): { budget: number; maxOffset: number; page: number } {
+	// Reserved either way: up to two subject lines, the gap above the body, the gap below it, and the author
+	// and date line. Expanded, the position indicator takes one more.
+	const budget = options.full
+		? Math.max(1, options.height - 6)
+		: Math.max(0, Math.floor(options.height / 2) - 4);
+	return {
+		budget,
+		maxOffset: Math.max(0, options.lines - budget),
+		// One line of overlap, so a paragraph split across two pages still reads as continuous.
+		page: Math.max(1, budget - 1)
+	};
+}
+
+/**
  * Splits the terminal's rows between the repo panel and the feed.
  *
  * Thirty repos cannot all be listed above a feed on a forty-row terminal, and a panel that consumes the

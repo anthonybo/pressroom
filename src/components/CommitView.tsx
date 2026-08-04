@@ -4,14 +4,20 @@
  * The height is a fixed budget rather than whatever the content wants, because this pane sits inside a
  * frame that must add up to the terminal's row count exactly. A commit body is arbitrarily long — this
  * workspace writes paragraphs into them — so the message gets at most half the pane and the file list gets
- * the rest, with what was cut counted rather than silently dropped.
+ * the rest.
+ *
+ * Counting what was cut is not the same as being able to read it. The first version printed "… 13 more lines"
+ * and stopped there, and since every movement key in this view drives the file list, those thirteen lines
+ * could not be reached by any means — the pane reported its own failure and offered no way out of it. The body
+ * now scrolls, `m` gives it the whole pane, and the line that counts the remainder names the keys that reach
+ * it.
  */
 import { Text } from 'ink';
 import type { ReactNode } from 'react';
 import { fit, padStart, stamp, truncate, width as columnsOf } from '../format.ts';
 import { Rule } from './Chrome.tsx';
 import { accent, BAR, UI } from '../theme.ts';
-import { windowFor } from '../layout.ts';
+import { commitBody, windowFor } from '../layout.ts';
 import type { Commit, FileChange } from '../types.ts';
 
 export function CommitView({
@@ -20,6 +26,8 @@ export function CommitView({
 	state,
 	cursor,
 	offset,
+	bodyOffset,
+	bodyFull,
 	height,
 	columns
 }: {
@@ -28,6 +36,10 @@ export function CommitView({
 	state: 'loading' | 'ready' | 'error';
 	cursor: number;
 	offset: number;
+	/** First body line on screen. Scrolled by the page keys; clamped by the caller. */
+	bodyOffset: number;
+	/** The message expanded over the file list, for a body too long to read half a pane at a time. */
+	bodyFull: boolean;
 	height: number;
 	columns: number;
 }) {
@@ -48,10 +60,12 @@ export function CommitView({
 		);
 	});
 
-	// Half the pane at most, so the file list is never squeezed out by a long message.
-	const bodyBudget = Math.max(0, Math.floor(height / 2) - 4);
+	// Half the pane at most, so the file list is never squeezed out by a long message — unless the message has
+	// been expanded on purpose, in which case it takes the lot.
 	const bodyLines = commit.body ? commit.body.split('\n') : [];
-	const shown = bodyLines.slice(0, bodyBudget);
+	const { budget, maxOffset } = commitBody({ height, lines: bodyLines.length, full: bodyFull });
+	const bodyStart = Math.min(Math.max(0, bodyOffset), maxOffset);
+	const shown = bodyLines.slice(bodyStart, bodyStart + budget);
 
 	if (shown.length) {
 		rows.push(blank('bodygap'));
@@ -63,10 +77,30 @@ export function CommitView({
 				</Text>
 			);
 		});
-		if (bodyLines.length > shown.length) {
+		/**
+		 * What is off screen, in both directions, and how to reach it.
+		 *
+		 * The old note counted only what was below and said nothing about how to get there, so a message longer
+		 * than the pane was simply unreadable and looked like it was meant to be. Naming the keys in the line
+		 * that reports the problem is the whole fix; a legend two keystrokes away is not where anyone looks.
+		 */
+		const above = bodyStart;
+		const below = bodyLines.length - (bodyStart + shown.length);
+		if (above || below) {
+			const lines = (n: number) => `${n} line${n === 1 ? '' : 's'}`;
+			const where =
+				above && below
+					? `↑ ${lines(above)}  ·  ↓ ${lines(below)}`
+					: below
+						? `${lines(below)} below`
+						: `${lines(above)} above`;
 			rows.push(
 				<Text key="bodymore" color={UI.dim} wrap="truncate">
-					{`   … ${bodyLines.length - shown.length} more lines`}
+					{'   '}
+					{truncate(
+						`… ${where}  ·  ⇞⇟ scroll  ·  ${bodyFull ? 'm shrinks' : 'm expands'}`,
+						Math.max(0, columns - 4)
+					)}
 				</Text>
 			);
 		}

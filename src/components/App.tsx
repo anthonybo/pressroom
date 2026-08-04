@@ -18,7 +18,7 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Engine, Snapshot } from '../engine.ts';
 import { clock, fit } from '../format.ts';
-import { feedColumns, splitRows, windowFor } from '../layout.ts';
+import { commitBody, feedColumns, splitRows, windowFor } from '../layout.ts';
 import {
 	deployStatePerRepo,
 	filterItems,
@@ -80,6 +80,9 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 	const [fileCursor, setFileCursor] = useState(0);
 	const [fileOffset, setFileOffset] = useState(0);
 	const [diffOffset, setDiffOffset] = useState(0);
+	/** First body line on screen in the commit view, and whether the message has the whole pane. */
+	const [bodyOffset, setBodyOffset] = useState(0);
+	const [bodyFull, setBodyFull] = useState(false);
 
 	const [files, setFiles] = useState<FileChange[]>([]);
 	const [filesState, setFilesState] = useState<LoadState>('loading');
@@ -195,6 +198,19 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 
 	const detail =
 		view.kind === 'commit' || view.kind === 'diff' ? { repo: view.repo, sha: view.sha } : null;
+
+	/**
+	 * How many lines the open commit's message body has.
+	 *
+	 * The key handler needs this to clamp the body scroll, and it has to be the same count the renderer splits
+	 * on — a handler that clamps against a number the pane does not use is how a message scrolls past its own
+	 * end and shows a screen of nothing.
+	 */
+	const bodyLineCount = useMemo(() => {
+		if (!detail) return 0;
+		const open = snapshot.feed.find((c) => c.repo === detail.repo && c.sha === detail.sha);
+		return open?.body ? open.body.split('\n').length : 0;
+	}, [snapshot.feed, detail?.repo, detail?.sha]);
 
 	useEffect(() => {
 		if (!detail) return;
@@ -320,6 +336,7 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 			setFiles([]);
 			setFileCursor(0);
 			setFileOffset(0);
+			setBodyOffset(0);
 			setView({ kind: 'commit', repo: landed.repo, sha: landed.sha });
 			return;
 		}
@@ -327,6 +344,8 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 		setFiles([]);
 		setFileCursor(0);
 		setFileOffset(0);
+		// A new commit starts at the top of its own message, not wherever the last one was scrolled to.
+		setBodyOffset(0);
 		setView({ kind: 'commit', repo: item.commit.repo, sha: item.commit.sha });
 	};
 
@@ -443,14 +462,42 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 		}
 
 		if (view.kind === 'commit') {
+			/**
+			 * Two things scroll here, and the keys are split by which one you are reading.
+			 *
+			 * `↑↓`/`jk` move the file cursor, because that is the selection Enter acts on. The page keys scroll
+			 * the *message*, which has no cursor and is the half of this pane that could not be reached at all
+			 * before. They do not compete: the file list is windowed around its cursor and never needed a page
+			 * key, and a body longer than half a pane has nothing else that would answer one.
+			 */
+			const geometry = { height: Math.max(1, rows - 3), lines: bodyLineCount };
+			const body = commitBody({ ...geometry, full: bodyFull });
 			if (key.escape || key.leftArrow || input === 'h') {
 				setView({ kind: 'feed' });
 			} else if (key.return || key.rightArrow || input === 'l') openDiff();
 			else if (key.downArrow || input === 'j')
 				setFileCursor((c) => Math.min(Math.max(0, files.length - 1), c + 1));
 			else if (key.upArrow || input === 'k') setFileCursor((c) => Math.max(0, c - 1));
-			else if (input === 'g') setFileCursor(0);
-			else if (input === 'G') setFileCursor(Math.max(0, files.length - 1));
+			else if (key.pageDown || (key.ctrl && input === 'd'))
+				setBodyOffset((o) => Math.min(body.maxOffset, o + body.page));
+			else if (key.pageUp || (key.ctrl && input === 'u'))
+				setBodyOffset((o) => Math.max(0, o - body.page));
+			else if (input === 'm') {
+				if (!bodyFull && body.maxOffset === 0) setFlash('the whole message already fits');
+				else setFlash(bodyFull ? 'message back to half the pane' : 'message expanded — files hidden');
+				setBodyFull(!bodyFull);
+				// Expanding shows more from wherever you are, so the offset is clamped rather than reset:
+				// resetting it would throw away the place you had scrolled to in order to need the key.
+				setBodyOffset((o) => Math.min(o, commitBody({ ...geometry, full: !bodyFull }).maxOffset));
+			} else if (input === 'g') {
+				// The top of the whole thing — the first file *and* the first line of the message. Getting back
+				// to the start of a long message is what this view was worst at.
+				setFileCursor(0);
+				setBodyOffset(0);
+			} else if (input === 'G') {
+				setFileCursor(Math.max(0, files.length - 1));
+				setBodyOffset(body.maxOffset);
+			}
 			return;
 		}
 
@@ -559,6 +606,8 @@ export function App({ engine, root }: { engine: Engine; root: string }) {
 						state={filesState}
 						cursor={fileCursor}
 						offset={fileOffset}
+						bodyOffset={bodyOffset}
+						bodyFull={bodyFull}
 						height={Math.max(1, rows - 3)}
 						columns={columns}
 					/>
@@ -717,6 +766,10 @@ function hintsFor(kind: View['kind'], paused: boolean, bell: boolean): [string, 
 		return [
 			['↑↓', 'files'],
 			['⏎', 'diff'],
+			// Named in the footer because the message is the one thing here you can fail to find at all: the
+			// file list shows a cursor, and a cut-off paragraph shows nothing that suggests a key.
+			['⇞⇟', 'message'],
+			['m', 'expand'],
 			['esc', 'back'],
 			['y', 'copy sha'],
 			['?', 'keys'],
@@ -750,12 +803,14 @@ function Help({ height, columns }: { height: number; columns: number }) {
 		[
 			'moving',
 			[
-				['↑ ↓  j k', 'move the cursor'],
-				['pgup pgdn', 'a page at a time — in the feed and the diff'],
+				['↑ ↓  j k', 'move the cursor — the file list, inside a commit'],
+				['pgup pgdn', 'a page: the feed, the diff, or a commit message too long for the pane'],
 				['^d ^u', 'the same, for keyboards without page keys'],
+				['m', "in a commit: the message takes the whole pane, hiding the file list"],
 				['g', 'follow the newest commit again — and mark what arrived as read'],
 				['↑↓', 'any movement stops following, and the cursor then stays where you put it'],
 				['G', 'jump to the oldest loaded commit'],
+				['g G', 'in a commit: the start or the end of the message and the file list'],
 				['⏎ → l', 'open the commit, then a file'],
 				['esc ← h', 'back out of a commit or a diff']
 			]

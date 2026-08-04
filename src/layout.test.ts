@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { feedColumns, layoutWidth, splitRows, windowFor } from './layout.ts';
+import { commitBody, feedColumns, layoutWidth, splitRows, windowFor } from './layout.ts';
 
 const WIDTHS = [40, 60, 72, 80, 96, 100, 116, 120, 140, 180, 240];
 
@@ -112,4 +112,67 @@ test('an offset left over from a longer list is clamped', () => {
 	// The feed shrinks when a filter is typed; a stale offset must not leave the window past the end.
 	assert.equal(windowFor(12, 10, 0, 90), 0);
 	assert.ok(windowFor(12, 10, 11, 90) <= 2);
+});
+
+/**
+ * The commit body's scroll geometry.
+ *
+ * The bug these exist for is a body that cannot be read: the pane counted the lines it was cutting and no key
+ * reached them. So the assertion that matters is **every line is reachable** — not that the arithmetic looks
+ * plausible, but that paging from the top actually lands on the last line.
+ */
+test('a body that fits has nothing to scroll', () => {
+	const body = commitBody({ height: 40, lines: 6, full: false });
+	assert.ok(body.budget >= 6);
+	assert.equal(body.maxOffset, 0);
+});
+
+test('a long body reports exactly what is off screen', () => {
+	const body = commitBody({ height: 40, lines: 60, full: false });
+	// Half the pane, less the subject, the two gaps and the author line.
+	assert.equal(body.budget, 16);
+	assert.equal(body.maxOffset, 44);
+	// The last page must end on the last line, never past it.
+	assert.equal(body.maxOffset + body.budget, 60);
+});
+
+test('paging reaches the last line of any body, at any terminal height', () => {
+	for (const height of [10, 24, 40, 52, 120]) {
+		for (const lines of [1, 7, 20, 61, 400]) {
+			for (const full of [false, true]) {
+				const body = commitBody({ height, lines, full });
+				const seen = new Set<number>();
+				let offset = 0;
+				// Walk the pages the key handler would produce, and record every line each one shows.
+				for (let step = 0; step <= lines + 2; step++) {
+					for (let line = offset; line < Math.min(lines, offset + body.budget); line++)
+						seen.add(line);
+					if (offset >= body.maxOffset) break;
+					offset = Math.min(body.maxOffset, offset + body.page);
+				}
+				assert.equal(
+					seen.size,
+					lines,
+					`height ${height}, ${lines} lines, full ${full}: ${lines - seen.size} unreachable`
+				);
+			}
+		}
+	}
+});
+
+test('expanding the message shows strictly more of it', () => {
+	const half = commitBody({ height: 40, lines: 60, full: false });
+	const whole = commitBody({ height: 40, lines: 60, full: true });
+	assert.ok(whole.budget > half.budget);
+	// And it cannot leave the body scrolled past its own end, which is what a stale offset would do.
+	assert.ok(whole.maxOffset < half.maxOffset);
+});
+
+test('a pane too short to hold anything still yields a usable page', () => {
+	// Never a zero or negative page: the key handler adds it to an offset and a zero would hang the scroll.
+	for (const height of [1, 2, 3, 6, 7]) {
+		const body = commitBody({ height, lines: 80, full: true });
+		assert.ok(body.page >= 1, `height ${height} produced page ${body.page}`);
+		assert.ok(body.budget >= 1);
+	}
 });
